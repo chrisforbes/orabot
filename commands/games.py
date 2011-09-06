@@ -20,6 +20,15 @@ import urllib.request
 import time
 import yaml
 
+def get_map_info(self, cur, sha):
+    sql = "SELECT title,players FROM maps WHERE hash = '%s'" % sha
+    cur.execute(sql)
+    records = cur.fetchall()
+    if len(records):
+        return (records[0][0], '/' + records[0][1])
+    else:
+        return ('unknown', '')
+
 def games(self, user, channel):
     command = (self.command)
     command = command.split()
@@ -30,37 +39,26 @@ def games(self, user, channel):
     if ( len(command) == 1 ):
         content = urllib.request.urlopen(url).read().decode('utf-8')
         y = yaml.load(content.replace('\t','    '))
-        keys_list = y.keys()
-        if ( len(keys_list) == 0 ):
+        if (len(y.keys()) == 0):
             self.send_reply( ("No games found"), user, channel )
         else:
             count='0'
-            for i in range(int(len(keys_list))):
-                if ( y['Game@'+str(i)]['State'] == 1 ):
+            for game in y.itervalues():
+                if ( game['State'] == 1 ):
                     count='1'   # lock - there are games in State: 1
                     state = '(W)'
                     ### for location
-                    ip = " ".join(y['Game@'+str(i)]['Address'].split(':')[0:-1])    # ip address
+                    ip = " ".join(game['Address'].split(':')[0:-1])    # ip address
                     gi = pygeoip.GeoIP('../GeoIP.dat')
                     country = gi.country_name_by_addr(ip).upper()   #got country name
                     ###
-                    sname = y['Game@'+str(i)]['Name']
+                    sname = game['Name']
                     if ( len(sname) == 0 ):
                         sname = 'noname'
-                    sql = """SELECT title,players FROM maps
-                            WHERE hash = '"""+y['Game@'+str(i)]['Map']+"""'
-                    """
-                    cur.execute(sql)
-                    records = cur.fetchall()
-                    conn.commit()
-                    if ( len(records) != 0 ):
-                        map_name = records[0][0]
-                        max_players = '/'+str(records[0][1])
-                    else:
-                        map_name = 'unknown'
-                        max_players = ''
-                    players = str(y['Game@'+str(i)]['Players'])
-                    modinfo = y['Game@'+str(i)]['Mods'].split('@')
+
+                    map_name, max_players = self.get_map_info(cur, game['Map'])
+                    players = str(game['Players'])
+                    modinfo = game['Mods'].split('@')
                     games = '@ '+sname.strip().ljust(15)+' - '+state+' - Players: '+players+max_players+' - Map: '+map_name+' - '+(modinfo[0].upper()+'@'+ modinfo[1]).ljust(20)+' - '+country
                     time.sleep(0.5)
                     flood_protection = flood_protection + 1
